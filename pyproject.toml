@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dual-memory"
+version = "0.1.0"
+description = "Short-term working memory plus long-term SQLite memory for AI agents, with a reproducible memory benchmark."
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Lashvin Manimaran" }]
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24"]
+keywords = ["llm", "agents", "memory", "rag", "sqlite", "fts5", "embeddings", "benchmark"]
+classifiers = [
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Typing :: Typed",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+onnx = ["onnxruntime>=1.16", "tokenizers>=0.15", "huggingface_hub>=0.20"]
+bench = ["matplotlib>=3.7"]
+dev = ["pytest>=7", "pytest-cov>=4", "mypy>=1.8", "ruff>=0.4", "matplotlib>=3.7"]
+
+[project.scripts]
+dual-memory = "dual_memory.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+dual_memory = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+files = ["src/dual_memory"]
+
+[[tool.mypy.overrides]]
+module = ["onnxruntime", "tokenizers", "huggingface_hub", "matplotlib", "matplotlib.*"]
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
+
+[tool.ruff.lint.per-file-ignores]
+"src/dual_memory/extract.py" = ["E501"]
+"src/dual_memory/answer.py" = ["E501"]

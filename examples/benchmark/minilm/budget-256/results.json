@@ -1,0 +1,236 @@
+{
+  "config": {
+    "budget_tokens": 256,
+    "k": 8,
+    "embedder": "onnx:sentence-transformers/all-MiniLM-L6-v2",
+    "embedder_label": "all-MiniLM-L6-v2 (ONNX, CPU)",
+    "mode": "stub",
+    "answerer": "RuleAnswerer",
+    "judge": "exact-match"
+  },
+  "dataset": {
+    "seed": 7,
+    "personas": 30,
+    "questions": 450,
+    "turns": 6552,
+    "paraphrase_rate": 0.15
+  },
+  "machine": {
+    "python": "3.10.12",
+    "platform": "Linux-6.8.0-149-generic-x86_64-with-glibc2.35"
+  },
+  "results": [
+    {
+      "method": "no-memory",
+      "questions": 450,
+      "accuracy": 0.0667,
+      "accuracy_covered": 0.0735,
+      "by_type": {
+        "current": 0.0,
+        "previous": 0.0,
+        "static": 0.0,
+        "friend": 0.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0,
+      "answer_in_context": 0.0,
+      "recall@1": null,
+      "recall@3": null,
+      "recall@8": null,
+      "retrieve_ms_p50": 0.001,
+      "retrieve_ms_p95": 0.003,
+      "ingest_ms_per_turn": 0.0,
+      "storage_bytes": 0,
+      "avg_context_tokens": 0.0
+    },
+    {
+      "method": "full-history",
+      "questions": 450,
+      "accuracy": 0.1067,
+      "accuracy_covered": 0.1176,
+      "by_type": {
+        "current": 0.1111,
+        "previous": 0.0,
+        "static": 0.0444,
+        "friend": 0.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0,
+      "answer_in_context": 0.0667,
+      "recall@1": null,
+      "recall@3": null,
+      "recall@8": null,
+      "retrieve_ms_p50": 0.122,
+      "retrieve_ms_p95": 0.155,
+      "ingest_ms_per_turn": 0.0022,
+      "storage_bytes": 419615,
+      "avg_context_tokens": 234.6
+    },
+    {
+      "method": "vector-rag",
+      "questions": 450,
+      "accuracy": 0.7667,
+      "accuracy_covered": 0.8309,
+      "by_type": {
+        "current": 0.7111,
+        "previous": 0.4333,
+        "static": 0.8444,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.1667,
+      "answer_in_context": 0.8643,
+      "recall@1": 0.5381,
+      "recall@3": 0.7167,
+      "recall@8": 0.8643,
+      "retrieve_ms_p50": 4.907,
+      "retrieve_ms_p95": 7.752,
+      "ingest_ms_per_turn": 3.2106,
+      "storage_bytes": 15495168,
+      "avg_context_tokens": 150.1556
+    },
+    {
+      "method": "summarize-all",
+      "questions": 450,
+      "accuracy": 0.6022,
+      "accuracy_covered": 0.6544,
+      "by_type": {
+        "current": 0.9111,
+        "previous": 0.4111,
+        "static": 0.5111,
+        "friend": 0.5,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0667,
+      "answer_in_context": 0.6,
+      "recall@1": null,
+      "recall@3": null,
+      "recall@8": null,
+      "retrieve_ms_p50": 0.066,
+      "retrieve_ms_p95": 0.109,
+      "ingest_ms_per_turn": 0.05,
+      "storage_bytes": 21809,
+      "avg_context_tokens": 234.5667
+    },
+    {
+      "method": "dual-memory",
+      "questions": 450,
+      "accuracy": 0.9044,
+      "accuracy_covered": 0.9828,
+      "by_type": {
+        "current": 0.9111,
+        "previous": 0.7778,
+        "static": 0.9167,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0778,
+      "answer_in_context": 0.919,
+      "recall@1": 0.7452,
+      "recall@3": 0.7762,
+      "recall@8": 0.8214,
+      "retrieve_ms_p50": 8.798,
+      "retrieve_ms_p95": 11.669,
+      "ingest_ms_per_turn": 1.496,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 226.3511,
+      "slot_consistency": 0.9111
+    },
+    {
+      "method": "dual: no supersede",
+      "questions": 450,
+      "accuracy": 0.9,
+      "accuracy_covered": 0.9779,
+      "by_type": {
+        "current": 0.9,
+        "previous": 0.7667,
+        "static": 0.9167,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0889,
+      "answer_in_context": 0.919,
+      "recall@1": 0.7452,
+      "recall@3": 0.9167,
+      "recall@8": 0.9214,
+      "retrieve_ms_p50": 8.45,
+      "retrieve_ms_p95": 9.266,
+      "ingest_ms_per_turn": 1.3734,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 198.2622,
+      "slot_consistency": 0.1
+    },
+    {
+      "method": "dual: vector only",
+      "questions": 450,
+      "accuracy": 0.9044,
+      "accuracy_covered": 0.9828,
+      "by_type": {
+        "current": 0.9111,
+        "previous": 0.7778,
+        "static": 0.9167,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0778,
+      "answer_in_context": 0.931,
+      "recall@1": 0.6738,
+      "recall@3": 0.7524,
+      "recall@8": 0.8286,
+      "retrieve_ms_p50": 8.534,
+      "retrieve_ms_p95": 9.871,
+      "ingest_ms_per_turn": 1.4104,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 222.4067,
+      "slot_consistency": 0.9111
+    },
+    {
+      "method": "dual: keyword only",
+      "questions": 450,
+      "accuracy": 0.9044,
+      "accuracy_covered": 0.9828,
+      "by_type": {
+        "current": 0.9111,
+        "previous": 0.7778,
+        "static": 0.9167,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0778,
+      "answer_in_context": 0.9143,
+      "recall@1": 0.7143,
+      "recall@3": 0.8048,
+      "recall@8": 0.8929,
+      "retrieve_ms_p50": 8.663,
+      "retrieve_ms_p95": 10.773,
+      "ingest_ms_per_turn": 1.4198,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 232.7911,
+      "slot_consistency": 0.9111
+    },
+    {
+      "method": "dual: no history",
+      "questions": 450,
+      "accuracy": 0.78,
+      "accuracy_covered": 0.8456,
+      "by_type": {
+        "current": 0.9111,
+        "previous": 0.1556,
+        "static": 0.9167,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0778,
+      "answer_in_context": 0.8,
+      "recall@1": 0.7452,
+      "recall@3": 0.7762,
+      "recall@8": 0.8214,
+      "retrieve_ms_p50": 8.68,
+      "retrieve_ms_p95": 10.989,
+      "ingest_ms_per_turn": 1.4523,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 209.3333,
+      "slot_consistency": 0.9111
+    }
+  ]
+}

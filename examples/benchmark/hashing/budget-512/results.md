@@ -1,0 +1,11 @@
+# Benchmark results
+
+Embedder `hashing (no model)`, mode `stub`, answerer `RuleAnswerer`, judge `exact-match`, context budget 512 tokens, k = 8. Dataset: seed 7, 30 personas, 6552 turns, 450 questions.
+
+| method | accuracy % | current | previous | static | friend | abstain | stale % | answer in context % | recall@8 % | retrieve p50 ms | storage KB |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| no-memory | 6.7 | 0.0 | 0.0 | 0.0 | 0.0 | 100.0 | 0.0 | 0.0 | n/a | 0.001 | 0 |
+| full-history | 13.8 | 21.1 | 0.0 | 7.2 | 0.0 | 100.0 | 0.0 | 11.4 | n/a | 0.213 | 410 |
+| vector-rag | 49.8 | 43.3 | 13.3 | 47.8 | 95.0 | 100.0 | 15.6 | 51.2 | 51.2 | 0.281 | 15132 |
+| summarize-all | 90.4 | 91.1 | 77.8 | 91.7 | 100.0 | 100.0 | 7.8 | 91.9 | n/a | 0.143 | 44 |
+| dual-memory | 90.4 | 91.1 | 77.8 | 91.7 | 100.0 | 100.0 | 7.8 | 91.7 | 82.1 | 1.476 | 3296 |

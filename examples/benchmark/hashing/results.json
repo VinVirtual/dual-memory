@@ -1,0 +1,236 @@
+{
+  "config": {
+    "budget_tokens": 256,
+    "k": 8,
+    "embedder": "hashing-384-c3",
+    "embedder_label": "hashing (no model)",
+    "mode": "stub",
+    "answerer": "RuleAnswerer",
+    "judge": "exact-match"
+  },
+  "dataset": {
+    "seed": 7,
+    "personas": 30,
+    "questions": 450,
+    "turns": 6552,
+    "paraphrase_rate": 0.15
+  },
+  "machine": {
+    "python": "3.10.12",
+    "platform": "Linux-6.8.0-149-generic-x86_64-with-glibc2.35"
+  },
+  "results": [
+    {
+      "method": "no-memory",
+      "questions": 450,
+      "accuracy": 0.0667,
+      "accuracy_covered": 0.0735,
+      "by_type": {
+        "current": 0.0,
+        "previous": 0.0,
+        "static": 0.0,
+        "friend": 0.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0,
+      "answer_in_context": 0.0,
+      "recall@1": null,
+      "recall@3": null,
+      "recall@8": null,
+      "retrieve_ms_p50": 0.001,
+      "retrieve_ms_p95": 0.001,
+      "ingest_ms_per_turn": 0.0,
+      "storage_bytes": 0,
+      "avg_context_tokens": 0.0
+    },
+    {
+      "method": "full-history",
+      "questions": 450,
+      "accuracy": 0.1067,
+      "accuracy_covered": 0.1176,
+      "by_type": {
+        "current": 0.1111,
+        "previous": 0.0,
+        "static": 0.0444,
+        "friend": 0.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0,
+      "answer_in_context": 0.0667,
+      "recall@1": null,
+      "recall@3": null,
+      "recall@8": null,
+      "retrieve_ms_p50": 0.066,
+      "retrieve_ms_p95": 0.11,
+      "ingest_ms_per_turn": 0.0012,
+      "storage_bytes": 419615,
+      "avg_context_tokens": 234.6
+    },
+    {
+      "method": "vector-rag",
+      "questions": 450,
+      "accuracy": 0.4978,
+      "accuracy_covered": 0.5368,
+      "by_type": {
+        "current": 0.4333,
+        "previous": 0.1333,
+        "static": 0.4778,
+        "friend": 0.95,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.1556,
+      "answer_in_context": 0.5119,
+      "recall@1": 0.3833,
+      "recall@3": 0.4548,
+      "recall@8": 0.5119,
+      "retrieve_ms_p50": 0.196,
+      "retrieve_ms_p95": 0.591,
+      "ingest_ms_per_turn": 0.1073,
+      "storage_bytes": 15495168,
+      "avg_context_tokens": 140.7111
+    },
+    {
+      "method": "summarize-all",
+      "questions": 450,
+      "accuracy": 0.6022,
+      "accuracy_covered": 0.6544,
+      "by_type": {
+        "current": 0.9111,
+        "previous": 0.4111,
+        "static": 0.5111,
+        "friend": 0.5,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0667,
+      "answer_in_context": 0.6,
+      "recall@1": null,
+      "recall@3": null,
+      "recall@8": null,
+      "retrieve_ms_p50": 0.104,
+      "retrieve_ms_p95": 0.122,
+      "ingest_ms_per_turn": 0.0583,
+      "storage_bytes": 21809,
+      "avg_context_tokens": 234.5667
+    },
+    {
+      "method": "dual-memory",
+      "questions": 450,
+      "accuracy": 0.9044,
+      "accuracy_covered": 0.9828,
+      "by_type": {
+        "current": 0.9111,
+        "previous": 0.7778,
+        "static": 0.9167,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0778,
+      "answer_in_context": 0.9143,
+      "recall@1": 0.7,
+      "recall@3": 0.7643,
+      "recall@8": 0.8214,
+      "retrieve_ms_p50": 1.357,
+      "retrieve_ms_p95": 2.048,
+      "ingest_ms_per_turn": 0.1334,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 231.1778,
+      "slot_consistency": 0.9111
+    },
+    {
+      "method": "dual: no supersede",
+      "questions": 450,
+      "accuracy": 0.9,
+      "accuracy_covered": 0.9779,
+      "by_type": {
+        "current": 0.9,
+        "previous": 0.7667,
+        "static": 0.9167,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0889,
+      "answer_in_context": 0.9143,
+      "recall@1": 0.7,
+      "recall@3": 0.9048,
+      "recall@8": 0.919,
+      "retrieve_ms_p50": 1.526,
+      "retrieve_ms_p95": 2.159,
+      "ingest_ms_per_turn": 0.1297,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 208.6689,
+      "slot_consistency": 0.1
+    },
+    {
+      "method": "dual: vector only",
+      "questions": 450,
+      "accuracy": 0.7489,
+      "accuracy_covered": 0.8113,
+      "by_type": {
+        "current": 0.7333,
+        "previous": 0.5778,
+        "static": 0.8056,
+        "friend": 0.7333,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0778,
+      "answer_in_context": 0.7667,
+      "recall@1": 0.4738,
+      "recall@3": 0.6286,
+      "recall@8": 0.7929,
+      "retrieve_ms_p50": 1.317,
+      "retrieve_ms_p95": 2.165,
+      "ingest_ms_per_turn": 0.1277,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 232.5556,
+      "slot_consistency": 0.9111
+    },
+    {
+      "method": "dual: keyword only",
+      "questions": 450,
+      "accuracy": 0.9044,
+      "accuracy_covered": 0.9828,
+      "by_type": {
+        "current": 0.9111,
+        "previous": 0.7778,
+        "static": 0.9167,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0778,
+      "answer_in_context": 0.9143,
+      "recall@1": 0.7143,
+      "recall@3": 0.8048,
+      "recall@8": 0.8929,
+      "retrieve_ms_p50": 1.549,
+      "retrieve_ms_p95": 2.392,
+      "ingest_ms_per_turn": 0.1351,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 232.7911,
+      "slot_consistency": 0.9111
+    },
+    {
+      "method": "dual: no history",
+      "questions": 450,
+      "accuracy": 0.7822,
+      "accuracy_covered": 0.848,
+      "by_type": {
+        "current": 0.9111,
+        "previous": 0.1667,
+        "static": 0.9167,
+        "friend": 1.0,
+        "abstain": 1.0
+      },
+      "stale_rate": 0.0778,
+      "answer_in_context": 0.7952,
+      "recall@1": 0.7,
+      "recall@3": 0.7643,
+      "recall@8": 0.8214,
+      "retrieve_ms_p50": 1.443,
+      "retrieve_ms_p95": 2.037,
+      "ingest_ms_per_turn": 0.1403,
+      "storage_bytes": 3375104,
+      "avg_context_tokens": 224.4244,
+      "slot_consistency": 0.9111
+    }
+  ]
+}
