@@ -21,23 +21,23 @@ from .text import normalize_value
 UNKNOWN = "unknown"
 Mode = Literal["current", "previous"]
 
-_NAME = r"(?P<s>[A-Z][a-z]+(?: [A-Z][a-z]+)?)"
+_NAME = r"(?P<s>[A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+(?: [A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+)?)"
 _PREVIOUS_RE = re.compile(r"\b(?:before|previous(?:ly)?|used to|formerly|old|earlier)\b", re.I)
 _LINE_RE = re.compile(
-    r"^\s*(?:\[(?P<date>\d{4}-\d{2}-\d{2})(?:[ T][0-9:]+)?\]\s*)?(?:(?P<speaker>[A-Z][A-Za-z]+):\s+)?(?P<body>.*)$"
+    r"^\s*(?:\[(?P<date>\d{4}-\d{2}-\d{2})(?:[ T][0-9:]+)?\]\s*)?(?:(?P<speaker>[A-ZÀ-ÖØ-Þ][\w-]*):\s+)?(?P<body>.*)$"
 )
 
 _QUESTIONS: list[tuple[re.Pattern[str], str]] = [
     (
         re.compile(
-            rf"where (?:does|did) {_NAME}'s (?:friend|brother|sister|cousin|colleague|neighbou?r|coworker) (?P<o>[A-Z][a-z]+) live"
+            rf"where (?:does|did) {_NAME}'s (?:friend|brother|sister|cousin|colleague|neighbou?r|coworker) (?P<o>[A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+) live"
         ),
         "city@o",
     ),
     (re.compile(rf"where (?:does|did) {_NAME} live"), "city"),
     (
         re.compile(
-            rf"what (?:does|did) {_NAME}'s (?:friend|brother|sister|cousin|colleague|neighbou?r|coworker) (?P<o>[A-Z][a-z]+) do for work"
+            rf"what (?:does|did) {_NAME}'s (?:friend|brother|sister|cousin|colleague|neighbou?r|coworker) (?P<o>[A-ZÀ-ÖØ-Þ][a-zß-öø-ÿ]+) do for work"
         ),
         "job@o",
     ),

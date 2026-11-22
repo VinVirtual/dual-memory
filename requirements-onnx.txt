@@ -1,0 +1,4 @@
+# Exact versions for the MiniLM (ONNX) benchmark job.
+onnxruntime==1.23.2
+tokenizers==0.23.3
+huggingface_hub==2.4.0

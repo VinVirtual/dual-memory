@@ -68,7 +68,7 @@ def _components(a: argparse.Namespace) -> Any:
 def cmd_bench(a: argparse.Namespace) -> int:
     from .bench.chart import render_chart
     from .bench.generate import load
-    from .bench.run import BenchConfig, markdown_table, run_benchmark, write_results
+    from .bench.run import SWEEP_METHODS, BenchConfig, markdown_table, run_benchmark, write_results
 
     data = load(a.data)
     comp, label = _components(a)
@@ -84,7 +84,7 @@ def cmd_bench(a: argparse.Namespace) -> int:
         if methods:
             cfg.methods = methods
         elif b != a.budget:
-            cfg.methods = ["no-memory", "full-history", "vector-rag", "summarize-all", "dual-memory"]
+            cfg.methods = list(SWEEP_METHODS)
         print(f"budget {b} tokens", flush=True)
         runs[b] = run_benchmark(data, cfg, comp, progress=lambda s: print("  " + s, flush=True))
         write_results(runs[b], out / f"budget-{b}", rows=False)

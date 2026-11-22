@@ -13,7 +13,7 @@ from typing import Any, cast
 import numpy as np
 
 from .embedders import Vectors
-from .text import fts_query
+from .text import fts_query, slot_key
 from .types import Fact, MemoryItem, MemoryKind, MemoryStatus, Provenance
 
 SCHEMA_VERSION = "1"
@@ -68,6 +68,18 @@ _COLUMNS = (
 )
 
 
+def unit(vec: Any, dim: int) -> Vectors:
+    """``vec`` as a flat float32 unit vector of length ``dim`` (zero stays zero)."""
+    v = np.asarray(vec, dtype=np.float32).reshape(-1)
+    if v.shape[0] != dim:
+        raise ValueError(f"embedding has dim {v.shape[0]}, store expects {dim}")
+    if not np.all(np.isfinite(v)):
+        raise ValueError("embedding contains NaN or infinite values")
+    norm = float(np.linalg.norm(v))
+    out: Vectors = v / norm if norm > 0 else v
+    return out
+
+
 class EmbedderMismatchError(RuntimeError):
     """The database was built with a different embedder than the one given."""
 
@@ -99,7 +111,12 @@ class SQLiteStore:
 
     The store refuses to open a file that was written with a different
     embedder (name or dimension), because mixing vector spaces silently
-    ruins retrieval.
+    ruins retrieval. Vectors are normalised to unit length on the way in,
+    so cosine similarity is a plain dot product whatever the embedder does.
+
+    A store is meant for one thread (``sqlite3``'s ``check_same_thread``
+    stays on). Several processes or connections may share a file: the
+    vector cache is refreshed when another connection commits.
     """
 
     def __init__(self, path: str | Path = ":memory:", *, embedder_name: str, dim: int) -> None:
@@ -113,7 +130,7 @@ class SQLiteStore:
         self._conn.executescript(_SCHEMA)
         self._check_meta(embedder_name, dim)
         self._version = 0
-        self._cache_key: tuple[int, bool, tuple[str, ...]] | None = None
+        self._cache_key: tuple[int, int, bool, tuple[str, ...]] | None = None
         self._cache: tuple[np.ndarray[Any, Any], Vectors] | None = None
 
     # -- lifecycle ---------------------------------------------------------
@@ -144,6 +161,10 @@ class SQLiteStore:
     ) -> None:
         self.close()
 
+    def _data_version(self) -> int:
+        """Changes when another connection commits to the same file."""
+        return int(self._conn.execute("PRAGMA data_version").fetchone()[0])
+
     @contextmanager
     def transaction(self) -> Iterator[None]:
         with self._conn:
@@ -154,11 +175,9 @@ class SQLiteStore:
     def insert(
         self, fact: Fact, embedding: Vectors, now: float | None = None, supersedes: int | None = None
     ) -> MemoryItem:
-        vec = np.asarray(embedding, dtype=np.float32).reshape(-1)
-        if vec.shape[0] != self.dim:
-            raise ValueError(f"embedding has dim {vec.shape[0]}, store expects {self.dim}")
+        vec = unit(embedding, self.dim)
         now = time.time() if now is None else now
-        event_time = fact.event_time or now
+        event_time = fact.event_time if fact.event_time is not None else now
         with self.transaction():
             cur = self._conn.execute(
                 "INSERT INTO memories (kind, text, subject, attribute, value, subject_key, "
@@ -171,8 +190,8 @@ class SQLiteStore:
                     fact.subject,
                     fact.attribute,
                     fact.value,
-                    fact.subject.strip().lower(),
-                    fact.attribute.strip().lower(),
+                    slot_key(fact.subject),
+                    slot_key(fact.attribute),
                     int(fact.exclusive),
                     fact.importance,
                     now,
@@ -188,6 +207,15 @@ class SQLiteStore:
         item = self.get(cast(int, cur.lastrowid))
         assert item is not None
         return item
+
+    def set_links(self, item_id: int, **fields: Any) -> None:
+        """Update supersede links: status, supersedes, superseded_by, superseded_at."""
+        allowed = {"status", "supersedes", "superseded_by", "superseded_at"}
+        if not fields or not set(fields) <= allowed:
+            raise ValueError(f"set_links accepts only {sorted(allowed)}")
+        cols = ", ".join(f"{k} = ?" for k in fields)
+        with self.transaction():
+            self._conn.execute(f"UPDATE memories SET {cols} WHERE id = ?", [*fields.values(), item_id])
 
     def mark_superseded(self, old_id: int, new_id: int, at: float) -> None:
         with self.transaction():
@@ -209,13 +237,67 @@ class SQLiteStore:
             raise KeyError(item_id)
         return item
 
-    def delete(self, item_id: int) -> bool:
-        """Hard-delete one memory (and unlink it from any supersede chain)."""
+    def delete(self, item_id: int, purge: bool = True) -> bool:
+        """Hard-delete one memory and splice it out of its supersede chain.
+
+        If B superseded A and C superseded B, deleting B links A straight to
+        C. Deleting the current value does not revive the older one; it stays
+        superseded. With ``purge`` the deleted text is also removed from the
+        full-text index pages and the write-ahead log (see ``purge``).
+        """
+        item = self.get(item_id)
+        if item is None:
+            return False
         with self.transaction():
-            self._conn.execute("UPDATE memories SET superseded_by = NULL WHERE superseded_by = ?", (item_id,))
-            self._conn.execute("UPDATE memories SET supersedes = NULL WHERE supersedes = ?", (item_id,))
-            cur = self._conn.execute("DELETE FROM memories WHERE id = ?", (item_id,))
-        return cur.rowcount > 0
+            self._conn.execute(
+                "UPDATE memories SET superseded_by = ? WHERE superseded_by = ?", (item.superseded_by, item_id)
+            )
+            self._conn.execute(
+                "UPDATE memories SET supersedes = ? WHERE supersedes = ?", (item.supersedes, item_id)
+            )
+            self._conn.execute("DELETE FROM memories WHERE id = ?", (item_id,))
+        if purge:
+            self.purge()
+        return True
+
+    def scrub_source(self, session_id: str, turn_index: int) -> int:
+        """Blank the copied source text of every memory read from one turn."""
+        with self.transaction():
+            cur = self._conn.execute(
+                "UPDATE memories SET source_text = '' WHERE session_id = ? AND turn_index = ?",
+                (session_id, turn_index),
+            )
+        return cur.rowcount
+
+    def ids_from_source(
+        self, session_id: str, turn_index: int | None = None, kinds: tuple[str, ...] = ()
+    ) -> list[int]:
+        sql = "SELECT id FROM memories WHERE session_id = ?"
+        args: list[Any] = [session_id]
+        if turn_index is not None:
+            sql += " AND turn_index = ?"
+            args.append(turn_index)
+        if kinds:
+            sql += f" AND kind IN ({','.join('?' * len(kinds))})"
+            args.extend(kinds)
+        return [int(r[0]) for r in self._conn.execute(sql + " ORDER BY id", args)]
+
+    def purge(self, vacuum: bool = False) -> None:
+        """Make deleted text unrecoverable from this file, as far as SQLite allows.
+
+        Rebuilds the FTS5 index segments (old segments hold deleted terms),
+        checkpoints and truncates the write-ahead log, and with ``vacuum``
+        rewrites the whole file. ``secure_delete`` is on, so freed pages are
+        zeroed. Copies outside this file (backups, logs, text already sent
+        to a model) are out of reach.
+        """
+        with self.transaction():
+            self._conn.execute("INSERT INTO memories_fts(memories_fts) VALUES ('rebuild')")
+            self._conn.execute("INSERT INTO memories_fts(memories_fts) VALUES ('optimize')")
+        if vacuum:
+            self._conn.execute("VACUUM")
+        if self.path != ":memory:":
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     # -- reads -------------------------------------------------------------
     def get(self, item_id: int) -> MemoryItem | None:
@@ -235,7 +317,7 @@ class SQLiteStore:
         if active_only:
             sql += " AND status = 'active'"
         sql += " ORDER BY event_time, id"
-        rows = self._conn.execute(sql, (subject.strip().lower(), attribute.strip().lower()))
+        rows = self._conn.execute(sql, (slot_key(subject), slot_key(attribute)))
         return [_row_to_item(r) for r in rows]
 
     def all_items(self, active_only: bool = False, kinds: tuple[str, ...] = ()) -> list[MemoryItem]:
@@ -255,7 +337,7 @@ class SQLiteStore:
         return (" WHERE " + " AND ".join(clauses) if clauses else ""), args
 
     def _matrix(self, active_only: bool, kinds: tuple[str, ...]) -> tuple[np.ndarray[Any, Any], Vectors]:
-        key = (self._version, active_only, kinds)
+        key = (self._version, self._data_version(), active_only, kinds)
         if self._cache_key == key and self._cache is not None:
             return self._cache
         sql, args = self._filter_sql(active_only, kinds)
@@ -276,7 +358,7 @@ class SQLiteStore:
         ids, mat = self._matrix(active_only, kinds)
         if len(ids) == 0 or n <= 0:
             return []
-        sims = mat @ np.asarray(query, dtype=np.float32).reshape(-1)
+        sims = mat @ unit(query, self.dim)
         n = min(n, len(ids))
         top = np.argpartition(-sims, n - 1)[:n]
         top = top[np.argsort(-sims[top], kind="stable")]

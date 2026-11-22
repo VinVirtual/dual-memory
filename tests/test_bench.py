@@ -122,7 +122,7 @@ def test_full_history_keeps_most_recent() -> None:
 
 
 def test_render_turn() -> None:
-    assert render_turn(Turn("assistant", "hi", 0), "Mira") == "Assistant: hi"
+    assert render_turn(Turn("assistant", "hi"), "Mira") == "Assistant: hi"
 
 
 def test_unknown_method() -> None:
@@ -132,7 +132,16 @@ def test_unknown_method() -> None:
 
 def test_result_structure(result: dict[str, Any], small: dict[str, Any]) -> None:
     names = [r["method"] for r in result["results"]]
-    assert names[:5] == ["no-memory", "full-history", "vector-rag", "summarize-all", "dual-memory"]
+    assert names[:8] == [
+        "no-memory",
+        "full-history",
+        "naive-rag",
+        "rag-user-turns",
+        "rag-budget-filled",
+        "rag-sentences",
+        "summarize-all",
+        "dual-memory",
+    ]
     n_q = sum(len(p["questions"]) for p in small["personas"])
     assert all(r["questions"] == n_q for r in result["results"])
     assert len(result["rows"]) == n_q * len(names)
@@ -187,3 +196,57 @@ def test_markdown_table_has_all_methods(result: dict[str, Any]) -> None:
 def test_write_results_without_rows(tmp_path: Path, result: dict[str, Any]) -> None:
     paths = write_results(result, tmp_path, rows=False)
     assert "rows" not in paths and not (tmp_path / "questions.jsonl").exists()
+
+
+def test_wilson_interval() -> None:
+    from dual_memory.bench.run import wilson
+
+    assert wilson(0, 0) is None
+    lo, hi = wilson(50, 100)  # type: ignore[misc]
+    assert lo < 0.5 < hi and round(hi - lo, 2) == 0.19
+    assert wilson(10, 10)[1] == 1.0  # type: ignore[index]
+
+
+def test_rag_variants_differ_as_designed(result: dict[str, Any]) -> None:
+    res = {r["method"]: r for r in result["results"]}
+    assert res["rag-budget-filled"]["avg_context_tokens"] > res["rag-user-turns"]["avg_context_tokens"]
+    rows = [r for r in result["rows"] if r["method"] == "naive-rag"]
+    assert rows and res["naive-rag"]["avg_context_tokens"] <= 256
+
+
+def test_rag_user_only_and_sentences() -> None:
+    from dual_memory.bench.methods import VectorRAG
+
+    emb = HashingEmbedder()
+    rag = VectorRAG("Mira", 200, emb, 8, user_only=True, fill_budget=True, sentences=True)
+    rag.ingest_session(
+        [Turn("user", "I live in Oslo. I like chess.", 1.0, "s1", 0), Turn("assistant", "Oslo!", 2.0)]
+    )
+    ctx = rag.retrieve("where does Mira live", 0).context
+    assert "Assistant" not in ctx and ctx.count("Mira:") == 2
+    rag.close()
+
+
+def test_fact_and_episode_ablations_restrict_kinds(result: dict[str, Any]) -> None:
+    res = {r["method"]: r for r in result["results"]}
+    assert "dual: facts only" in res and "dual: episodes only" in res
+    eps = [r for r in result["rows"] if r["method"] == "dual: episodes only"]
+    assert eps
+
+
+def test_results_record_ci(result: dict[str, Any]) -> None:
+    for r in result["results"]:
+        lo, hi = r["accuracy_ci95"]
+        assert lo <= r["accuracy"] <= hi
+
+
+def test_stub_benchmark_is_reproducible() -> None:
+    """A fixed small run must give exactly these answers (CI guards determinism with it)."""
+    import hashlib
+
+    data = generate(seed=7, personas=3, sessions=6)
+    res = run_benchmark(data, BenchConfig(budget=256), Components(embedder=HashingEmbedder()))
+    blob = "\n".join(f"{r['method']}|{r['id']}|{r['answer']}" for r in res["rows"])
+    digest = hashlib.sha256(blob.encode()).hexdigest()
+    expected = (Path(__file__).parent / "data" / "stub_answers.sha256").read_text().strip()
+    assert digest == expected, f"stub answers changed: {digest}"

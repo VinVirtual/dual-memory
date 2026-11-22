@@ -10,14 +10,23 @@ INK = "#0b0b0b"
 INK_2 = "#52514e"
 GRID = "#e4e3df"
 MUTED = "#b9b8b2"
-# Fixed colour per method (categorical slots 1-4), identical in every panel.
-METHOD_COLORS = {
+# Fixed colour per role (categorical slots 1-4), identical in every panel.
+# "vector RAG" is the strongest RAG variant at the main budget.
+ROLE_COLORS = {
     "dual-memory": "#2a78d6",
     "summarize-all": "#eb6834",
-    "vector-rag": "#1baf7a",
+    "vector RAG": "#1baf7a",
     "full-history": "#eda100",
 }
-MAIN = ["dual-memory", "summarize-all", "vector-rag", "full-history"]
+RAG_PREFIXES = ("naive-rag", "rag-")
+
+
+def best_rag(results: list[dict[str, Any]]) -> str | None:
+    """The RAG variant with the highest accuracy (first one on ties)."""
+    rags = [r for r in results if r["method"].startswith(RAG_PREFIXES)]
+    return max(rags, key=lambda r: r["accuracy"])["method"] if rags else None
+
+
 TYPES = [
     ("current", "current\n(changed)"),
     ("previous", "previous\nvalue"),
@@ -45,6 +54,12 @@ def render_chart(main: dict[str, Any], sweep: list[dict[str, Any]] | None, out: 
     import matplotlib.pyplot as plt
 
     res = {r["method"]: r for r in main["results"]}
+    rag = best_rag(main["results"])
+    roles = {"dual-memory": "dual-memory", "summarize-all": "summarize-all", "full-history": "full-history"}
+    if rag:
+        roles[rag] = "vector RAG"
+    colors_by_method = {m: ROLE_COLORS[role] for m, role in roles.items()}
+    labels = {m: (f"vector RAG ({m})" if role == "vector RAG" else m) for m, role in roles.items()}
     has_sweep = bool(sweep and len(sweep) > 1)
     fig, axes = plt.subplots(
         1,
@@ -56,13 +71,18 @@ def render_chart(main: dict[str, Any], sweep: list[dict[str, Any]] | None, out: 
 
     # A: overall accuracy, every method, sorted.
     ax = axes[0]
-    ordered = sorted(res.values(), key=lambda r: (r["accuracy"], r["method"] in METHOD_COLORS))
+    ordered = sorted(res.values(), key=lambda r: (r["accuracy"], r["method"] in colors_by_method))
     names = [r["method"] for r in ordered]
     vals = [100 * r["accuracy"] for r in ordered]
-    colors = [METHOD_COLORS.get(n, MUTED) for n in names]
+    colors = [colors_by_method.get(n, MUTED) for n in names]
     ax.barh(names, vals, color=colors, height=0.62, edgecolor=SURFACE, linewidth=2)
+    for y, r in enumerate(ordered):  # 95% Wilson interval as a thin whisker
+        ci = r.get("accuracy_ci95")
+        if ci:
+            ax.plot([100 * ci[0], 100 * ci[1]], [y, y], color=INK_2, linewidth=1)
     for y, v in enumerate(vals):
-        ax.text(v + 1, y, f"{v:.1f}", va="center", fontsize=9, color=INK)
+        ci = ordered[y].get("accuracy_ci95")
+        ax.text(max(v, 100 * ci[1] if ci else v) + 1, y, f"{v:.1f}", va="center", fontsize=8.5, color=INK)
     ax.set_xlim(0, 108)
     _style(ax)
     ax.grid(axis="y", visible=False)
@@ -77,19 +97,22 @@ def render_chart(main: dict[str, Any], sweep: list[dict[str, Any]] | None, out: 
 
     # B: accuracy by question type, main methods.
     ax = axes[1]
-    present = [m for m in MAIN if m in res]
+    order = ["dual-memory", rag, "summarize-all", "full-history"]
+    present = [m for m in order if m and m in res]
     width = 0.8 / max(len(present), 1)
     for i, m in enumerate(present):
         xs = [j + (i - (len(present) - 1) / 2) * width for j in range(len(TYPES))]
         ys = [100 * (res[m]["by_type"][t] or 0.0) for t, _ in TYPES]
-        ax.bar(xs, ys, width=width, color=METHOD_COLORS[m], label=m, edgecolor=SURFACE, linewidth=2)
+        ax.bar(
+            xs, ys, width=width, color=colors_by_method[m], label=labels[m], edgecolor=SURFACE, linewidth=2
+        )
     ax.set_xticks(range(len(TYPES)), [label for _, label in TYPES])
     ax.set_ylim(0, 105)
     _style(ax)
     ax.legend(
         frameon=False,
         fontsize=9,
-        ncol=len(present),
+        ncol=2,
         loc="upper center",
         labelcolor=INK_2,
         bbox_to_anchor=(0.5, -0.13),
@@ -103,19 +126,19 @@ def render_chart(main: dict[str, Any], sweep: list[dict[str, Any]] | None, out: 
         ax = axes[2]
         budgets = [s["config"]["budget_tokens"] for s in sweep]
         ends: list[tuple[float, str]] = []
-        for m in present:
+        for m in [p for p in present if all(any(r["method"] == p for r in s["results"]) for s in sweep)]:
             ys = [100 * next(r["accuracy"] for r in s["results"] if r["method"] == m) for s in sweep]
             ax.plot(
                 budgets,
                 ys,
-                color=METHOD_COLORS[m],
+                color=colors_by_method[m],
                 linewidth=2,
                 marker="o",
                 markersize=6,
                 markeredgecolor=SURFACE,
                 markeredgewidth=1.5,
             )
-            ends.append((ys[-1], m))
+            ends.append((ys[-1], labels[m]))
         placed: list[float] = []
         for y_end, m in sorted(ends, reverse=True):  # keep end labels at least 6 points apart
             y_label = min([y_end, *[p - 6 for p in placed]]) if placed else y_end
@@ -143,7 +166,8 @@ def render_chart(main: dict[str, Any], sweep: list[dict[str, Any]] | None, out: 
         0.015,
         f"Synthetic benchmark, seed {d['seed']}: {d['personas']} personas, {d['turns']} turns, "
         f"{d['questions']} questions. Embedder {c['embedder_label']}; mode {c['mode']} "
-        f"(deterministic reader, exact-match judge); budget {c['budget_tokens']} tokens, k={c['k']}.",
+        f"(deterministic reader, exact-match judge); budget {c['budget_tokens']} tokens, k={c['k']}. "
+        "Whiskers: 95% Wilson intervals.",
         fontsize=8.5,
         color=INK_2,
     )

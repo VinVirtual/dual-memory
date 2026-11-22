@@ -7,7 +7,8 @@ from collections.abc import Callable
 
 TokenCounter = Callable[[str], int]
 
-_WORD_RE = re.compile(r"[A-Za-z0-9]+(?:'[A-Za-z]+)?")
+# Unicode-aware: "Zürich", "café" and "東京" are words too.
+_WORD_RE = re.compile(r"\w+(?:'\w+)?", re.UNICODE)
 _PIECE_RE = re.compile(r"\w+|[^\w\s]", re.UNICODE)
 
 # A small stop-word list, used only for keyword queries and near-duplicate checks.
@@ -34,8 +35,13 @@ def approx_tokens(text: str) -> int:
 
 
 def words(text: str) -> list[str]:
-    """Lower-cased words of ``text`` (letters, digits and inner apostrophes)."""
-    return [w.lower() for w in _WORD_RE.findall(text)]
+    """Case-folded words of ``text`` (Unicode letters, digits and inner apostrophes)."""
+    return [w.casefold() for w in _WORD_RE.findall(text.replace("\u2019", "'")) if w != "_"]
+
+
+def slot_key(text: str) -> str:
+    """Key used to match subjects and attributes: case-folded, single-spaced."""
+    return re.sub(r"\s+", " ", text).strip().casefold()
 
 
 def content_words(text: str) -> list[str]:
@@ -45,7 +51,7 @@ def content_words(text: str) -> list[str]:
 
 def normalize_value(value: str) -> str:
     """Normalise an answer or slot value for exact comparison."""
-    v = value.strip().lower()
+    v = value.strip().casefold()
     v = re.sub(r"^(the|a|an)\s+", "", v)
     v = re.sub(r"[^\w\s'-]", "", v)
     return re.sub(r"\s+", " ", v).strip()
@@ -73,3 +79,11 @@ def fts_query(text: str, max_terms: int = 12) -> str:
         if len(seen) >= max_terms:
             break
     return " OR ".join(f'"{w}"' for w in seen)
+
+
+_TAG_RE = re.compile(r"<(/?[A-Za-z_][\w-]*)>")
+
+
+def escape_tags(text: str) -> str:
+    """Neutralise tag-like text (``<context>``, ``</memory>``) so it cannot close a prompt section."""
+    return _TAG_RE.sub(lambda m: "&lt;" + m.group(1) + "&gt;", text)

@@ -15,9 +15,9 @@ class Summarizer(Protocol):
     def summarize(self, previous: str, turns: Sequence[Turn], max_tokens: int) -> str: ...
 
 
-def date_tag(ts: float) -> str:
-    """``[YYYY-MM-DD]`` for a timestamp, or an empty string for 0."""
-    return f"[{time.strftime('%Y-%m-%d', time.gmtime(ts))}] " if ts else ""
+def date_tag(ts: float | None) -> str:
+    """``[YYYY-MM-DD] `` for a timestamp, or an empty string for ``None``."""
+    return f"[{time.strftime('%Y-%m-%d', time.gmtime(ts))}] " if ts is not None else ""
 
 
 class RuleSummarizer:

@@ -17,13 +17,13 @@ VALID_KINDS: tuple[str, ...] = ("fact", "episode", "turn")
 class Turn:
     """One message in a conversation.
 
-    ``ts`` is a Unix timestamp (seconds). ``session_id`` and ``index`` say where
+    ``ts`` is a Unix timestamp (seconds), or ``None`` when unknown. ``session_id`` and ``index`` say where
     the turn came from, so memories built from it can point back to it.
     """
 
     role: Role
     content: str
-    ts: float = 0.0
+    ts: float | None = None
     session_id: str = ""
     index: int = -1
 
@@ -60,7 +60,7 @@ class Fact:
     exclusive: bool = True
     importance: float = 0.5
     kind: MemoryKind = "fact"
-    event_time: float = 0.0
+    event_time: float | None = None
     provenance: Provenance = field(default_factory=Provenance)
 
     def __post_init__(self) -> None:

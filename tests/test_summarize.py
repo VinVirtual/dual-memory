@@ -32,4 +32,5 @@ def test_zero_budget() -> None:
 
 
 def test_date_tag() -> None:
-    assert date_tag(0) == "" and date_tag(T0).startswith("[2025-01-")
+    assert date_tag(None) == "" and date_tag(T0).startswith("[2025-01-")
+    assert date_tag(0.0) == "[1970-01-01] "  # 0 is a real time, not "unknown"

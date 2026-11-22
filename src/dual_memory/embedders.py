@@ -30,6 +30,34 @@ log = logging.getLogger(__name__)
 Vectors = npt.NDArray[np.float32]
 
 DEFAULT_ONNX_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+# The exact files the published benchmark was run with: a pinned Hub commit
+# and the SHA-256 of each file. Downloads are checked against them.
+DEFAULT_ONNX_REVISION = "1110a243fdf4706b3f48f1d95db1a4f5529b4d41"
+DEFAULT_ONNX_SHA256 = {
+    "onnx/model.onnx": "6fd5d72fe4589f189f8ebc006442dbb529bb7ce38f8082112682524616046452",
+    "tokenizer.json": "be50c3628f2bf5bb5e3a7f17b1f74611b2561a3a27eeab05e5aa30f411572037",
+}
+
+
+class ModelIntegrityError(RuntimeError):
+    """A model file does not match its expected SHA-256."""
+
+
+def sha256_file(path: str | Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def verify_files(files: dict[str, Path], expected: dict[str, str]) -> dict[str, str]:
+    """Check each file's SHA-256 against ``expected`` (by key); return the actual hashes."""
+    actual = {key: sha256_file(path) for key, path in files.items()}
+    for key, digest in expected.items():
+        if key in actual and actual[key] != digest:
+            raise ModelIntegrityError(f"{files[key]} has SHA-256 {actual[key]}, expected {digest}")
+    return actual
 
 
 @runtime_checkable
@@ -99,13 +127,28 @@ class OnnxEmbedder:
         max_length: int = 256,
         batch_size: int = 64,
         threads: int = 2,
+        revision: str | None = None,
+        sha256: dict[str, str] | None = None,
     ) -> None:
+        """Load the model from ``model_dir`` or download it from the Hugging Face Hub.
+
+        For the default model, ``revision`` and ``sha256`` default to the
+        pinned commit and file hashes above, and a mismatch raises
+        ``ModelIntegrityError``. Pass ``sha256={}`` to skip the check.
+        """
         try:
             import onnxruntime as ort
             from tokenizers import Tokenizer
         except ImportError as exc:  # pragma: no cover - depends on optional deps
             raise ImportError('OnnxEmbedder needs the onnx extra: pip install "dual-memory[onnx]"') from exc
-        onnx_path, tok_path = self._locate(model, model_dir)
+        if model == DEFAULT_ONNX_MODEL:
+            revision = revision or DEFAULT_ONNX_REVISION
+            sha256 = DEFAULT_ONNX_SHA256 if sha256 is None else sha256
+        onnx_path, tok_path = self._locate(model, model_dir, revision)
+        self.files_sha256 = verify_files(
+            {"onnx/model.onnx": onnx_path, "tokenizer.json": tok_path}, sha256 or {}
+        )
+        self.revision = revision
         self._model = model
         self._batch = batch_size
         self._tok = Tokenizer.from_file(str(tok_path))
@@ -121,7 +164,7 @@ class OnnxEmbedder:
         self._dim = int(self.embed(["probe"]).shape[1])
 
     @staticmethod
-    def _locate(model: str, model_dir: str | Path | None) -> tuple[Path, Path]:
+    def _locate(model: str, model_dir: str | Path | None, revision: str | None) -> tuple[Path, Path]:
         if model_dir is not None:
             base = Path(model_dir)
             onnx = base / "onnx" / "model.onnx"
@@ -136,8 +179,8 @@ class OnnxEmbedder:
         except ImportError as exc:  # pragma: no cover
             raise ImportError('pip install "dual-memory[onnx]" to download models') from exc
         return (
-            Path(hf_hub_download(model, "onnx/model.onnx")),
-            Path(hf_hub_download(model, "tokenizer.json")),
+            Path(hf_hub_download(model, "onnx/model.onnx", revision=revision)),
+            Path(hf_hub_download(model, "tokenizer.json", revision=revision)),
         )
 
     @property

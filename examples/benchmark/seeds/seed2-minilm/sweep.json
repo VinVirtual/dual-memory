@@ -1,0 +1,294 @@
+[
+  {
+    "budget_tokens": 256,
+    "results": [
+      {
+        "method": "no-memory",
+        "questions": 450,
+        "accuracy": 0.0667,
+        "accuracy_ci95": [
+          0.0471,
+          0.0936
+        ],
+        "accuracy_covered": 0.0754,
+        "stale_rate": 0.0,
+        "answer_in_context": 0.0,
+        "recall@1": null,
+        "recall@3": null,
+        "recall@8": null,
+        "retrieve_ms_p50": 0.001,
+        "retrieve_ms_p95": 0.002,
+        "ingest_ms_per_turn": 0.0,
+        "storage_bytes": 0,
+        "avg_context_tokens": 0.0
+      },
+      {
+        "method": "full-history",
+        "questions": 450,
+        "accuracy": 0.0956,
+        "accuracy_ci95": [
+          0.0717,
+          0.1262
+        ],
+        "accuracy_covered": 0.108,
+        "stale_rate": 0.0,
+        "answer_in_context": 0.0452,
+        "recall@1": null,
+        "recall@3": null,
+        "recall@8": null,
+        "retrieve_ms_p50": 0.113,
+        "retrieve_ms_p95": 0.128,
+        "ingest_ms_per_turn": 0.0017,
+        "storage_bytes": 419318,
+        "avg_context_tokens": 232.4333
+      },
+      {
+        "method": "naive-rag",
+        "questions": 450,
+        "accuracy": 0.7378,
+        "accuracy_ci95": [
+          0.6952,
+          0.7763
+        ],
+        "accuracy_covered": 0.8116,
+        "stale_rate": 0.2889,
+        "answer_in_context": 0.8833,
+        "recall@1": 0.5405,
+        "recall@3": 0.7381,
+        "recall@8": 0.8833,
+        "retrieve_ms_p50": 4.935,
+        "retrieve_ms_p95": 11.093,
+        "ingest_ms_per_turn": 4.1348,
+        "storage_bytes": 15478784,
+        "avg_context_tokens": 150.2333
+      },
+      {
+        "method": "rag-user-turns",
+        "questions": 450,
+        "accuracy": 0.7467,
+        "accuracy_ci95": [
+          0.7045,
+          0.7846
+        ],
+        "accuracy_covered": 0.8191,
+        "stale_rate": 0.3,
+        "answer_in_context": 0.8929,
+        "recall@1": 0.5405,
+        "recall@3": 0.7405,
+        "recall@8": 0.8929,
+        "retrieve_ms_p50": 5.073,
+        "retrieve_ms_p95": 6.736,
+        "ingest_ms_per_turn": 1.6774,
+        "storage_bytes": 8450048,
+        "avg_context_tokens": 148.8156
+      },
+      {
+        "method": "rag-budget-filled",
+        "questions": 450,
+        "accuracy": 0.7822,
+        "accuracy_ci95": [
+          0.7418,
+          0.8179
+        ],
+        "accuracy_covered": 0.8568,
+        "stale_rate": 0.2667,
+        "answer_in_context": 0.9238,
+        "recall@1": 0.5405,
+        "recall@3": 0.7405,
+        "recall@8": 0.8929,
+        "retrieve_ms_p50": 5.804,
+        "retrieve_ms_p95": 10.023,
+        "ingest_ms_per_turn": 2.1047,
+        "storage_bytes": 8450048,
+        "avg_context_tokens": 237.4178
+      },
+      {
+        "method": "rag-sentences",
+        "questions": 450,
+        "accuracy": 0.7822,
+        "accuracy_ci95": [
+          0.7418,
+          0.8179
+        ],
+        "accuracy_covered": 0.8568,
+        "stale_rate": 0.2667,
+        "answer_in_context": 0.9238,
+        "recall@1": 0.5405,
+        "recall@3": 0.7405,
+        "recall@8": 0.8929,
+        "retrieve_ms_p50": 5.841,
+        "retrieve_ms_p95": 8.396,
+        "ingest_ms_per_turn": 1.7008,
+        "storage_bytes": 8450048,
+        "avg_context_tokens": 237.4178
+      },
+      {
+        "method": "summarize-all",
+        "questions": 450,
+        "accuracy": 0.5822,
+        "accuracy_ci95": [
+          0.5361,
+          0.6269
+        ],
+        "accuracy_covered": 0.6482,
+        "stale_rate": 0.0889,
+        "answer_in_context": 0.5881,
+        "recall@1": null,
+        "recall@3": null,
+        "recall@8": null,
+        "retrieve_ms_p50": 0.087,
+        "retrieve_ms_p95": 0.113,
+        "ingest_ms_per_turn": 0.058,
+        "storage_bytes": 21804,
+        "avg_context_tokens": 234.1333
+      },
+      {
+        "method": "dual-memory",
+        "questions": 450,
+        "accuracy": 0.88,
+        "accuracy_ci95": [
+          0.8467,
+          0.9069
+        ],
+        "accuracy_covered": 0.9648,
+        "stale_rate": 0.1556,
+        "answer_in_context": 0.9143,
+        "recall@1": 0.6881,
+        "recall@3": 0.75,
+        "recall@8": 0.8286,
+        "retrieve_ms_p50": 10.978,
+        "retrieve_ms_p95": 20.239,
+        "ingest_ms_per_turn": 2.2411,
+        "storage_bytes": 3383296,
+        "avg_context_tokens": 222.1711,
+        "slot_consistency": 0.8333
+      },
+      {
+        "method": "dual: no supersede",
+        "questions": 450,
+        "accuracy": 0.8756,
+        "accuracy_ci95": [
+          0.8418,
+          0.9029
+        ],
+        "accuracy_covered": 0.9598,
+        "stale_rate": 0.1667,
+        "answer_in_context": 0.9119,
+        "recall@1": 0.6786,
+        "recall@3": 0.8952,
+        "recall@8": 0.9143,
+        "retrieve_ms_p50": 11.79,
+        "retrieve_ms_p95": 21.837,
+        "ingest_ms_per_turn": 2.4816,
+        "storage_bytes": 3379200,
+        "avg_context_tokens": 187.62,
+        "slot_consistency": 0.1
+      },
+      {
+        "method": "dual: vector only",
+        "questions": 450,
+        "accuracy": 0.8778,
+        "accuracy_ci95": [
+          0.8443,
+          0.9049
+        ],
+        "accuracy_covered": 0.9623,
+        "stale_rate": 0.1556,
+        "answer_in_context": 0.9167,
+        "recall@1": 0.6714,
+        "recall@3": 0.7429,
+        "recall@8": 0.819,
+        "retrieve_ms_p50": 11.203,
+        "retrieve_ms_p95": 15.143,
+        "ingest_ms_per_turn": 6.7439,
+        "storage_bytes": 3383296,
+        "avg_context_tokens": 219.3178,
+        "slot_consistency": 0.8333
+      },
+      {
+        "method": "dual: keyword only",
+        "questions": 450,
+        "accuracy": 0.8778,
+        "accuracy_ci95": [
+          0.8443,
+          0.9049
+        ],
+        "accuracy_covered": 0.9623,
+        "stale_rate": 0.1556,
+        "answer_in_context": 0.9119,
+        "recall@1": 0.7214,
+        "recall@3": 0.8119,
+        "recall@8": 0.8952,
+        "retrieve_ms_p50": 11.462,
+        "retrieve_ms_p95": 24.937,
+        "ingest_ms_per_turn": 2.3428,
+        "storage_bytes": 3383296,
+        "avg_context_tokens": 233.1133,
+        "slot_consistency": 0.8333
+      },
+      {
+        "method": "dual: no history",
+        "questions": 450,
+        "accuracy": 0.7711,
+        "accuracy_ci95": [
+          0.7301,
+          0.8075
+        ],
+        "accuracy_covered": 0.8417,
+        "stale_rate": 0.1556,
+        "answer_in_context": 0.8071,
+        "recall@1": 0.6881,
+        "recall@3": 0.75,
+        "recall@8": 0.8286,
+        "retrieve_ms_p50": 10.859,
+        "retrieve_ms_p95": 32.625,
+        "ingest_ms_per_turn": 2.6004,
+        "storage_bytes": 3383296,
+        "avg_context_tokens": 204.2511,
+        "slot_consistency": 0.8333
+      },
+      {
+        "method": "dual: facts only",
+        "questions": 450,
+        "accuracy": 0.8822,
+        "accuracy_ci95": [
+          0.8492,
+          0.9088
+        ],
+        "accuracy_covered": 0.9673,
+        "stale_rate": 0.1556,
+        "answer_in_context": 0.9071,
+        "recall@1": 0.6857,
+        "recall@3": 0.7429,
+        "recall@8": 0.7548,
+        "retrieve_ms_p50": 17.592,
+        "retrieve_ms_p95": 37.119,
+        "ingest_ms_per_turn": 3.6987,
+        "storage_bytes": 3383296,
+        "avg_context_tokens": 185.2133,
+        "slot_consistency": 0.8333
+      },
+      {
+        "method": "dual: episodes only",
+        "questions": 450,
+        "accuracy": 0.54,
+        "accuracy_ci95": [
+          0.4938,
+          0.5855
+        ],
+        "accuracy_covered": 0.593,
+        "stale_rate": 0.2333,
+        "answer_in_context": 0.6048,
+        "recall@1": 0.4548,
+        "recall@3": 0.6714,
+        "recall@8": 0.8738,
+        "retrieve_ms_p50": 11.82,
+        "retrieve_ms_p95": 35.017,
+        "ingest_ms_per_turn": 3.0056,
+        "storage_bytes": 3383296,
+        "avg_context_tokens": 233.7689,
+        "slot_consistency": 0.8333
+      }
+    ]
+  }
+]

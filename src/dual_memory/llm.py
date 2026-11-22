@@ -12,11 +12,13 @@
 from __future__ import annotations
 
 import calendar
+import ipaddress
 import json
 import os
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Sequence
 from typing import Any, Protocol
@@ -24,6 +26,7 @@ from typing import Any, Protocol
 from .answer import UNKNOWN, RuleAnswerer, exact_match
 from .extract import SLOTS, RuleExtractor, render_fact, split_sentences
 from .summarize import RuleSummarizer, date_tag
+from .text import escape_tags
 from .types import Fact, Provenance, Turn
 
 Message = dict[str, str]
@@ -39,8 +42,31 @@ class LLMError(RuntimeError):
     """The model endpoint failed or returned something unusable."""
 
 
+def is_loopback(host: str) -> bool:
+    if host.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(host.strip("[]")).is_loopback
+    except ValueError:
+        return False
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Refuse every redirect, so the Authorization header never follows one."""
+
+    def redirect_request(self, *args: Any, **kwargs: Any) -> None:
+        return None
+
+
 class OpenAICompatibleLLM:
-    """Minimal client for an OpenAI-compatible chat completions endpoint."""
+    """Minimal client for an OpenAI-compatible chat completions endpoint.
+
+    Safety rules for the key: it is read from ``api_key_env`` at call time
+    and never stored; it is only sent over HTTPS, or over plain HTTP to a
+    loopback host (a local server); redirects are refused, so it never
+    follows one to another origin; and requests to a loopback host ignore
+    proxy settings.
+    """
 
     def __init__(
         self,
@@ -49,8 +75,11 @@ class OpenAICompatibleLLM:
         api_key_env: str = "OPENAI_API_KEY",
         timeout: float = 60.0,
     ) -> None:
-        if not base_url.startswith(("http://", "https://")):
-            raise ValueError("base_url must start with http:// or https://")
+        parsed = urllib.parse.urlsplit(base_url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            raise ValueError("base_url must be an http:// or https:// URL with a host")
+        self.host = parsed.hostname
+        self.scheme = parsed.scheme
         self.model = model
         self.base_url = base_url.rstrip("/")
         self.api_key_env = api_key_env
@@ -69,11 +98,20 @@ class OpenAICompatibleLLM:
         ).encode()
         headers = {"Content-Type": "application/json"}
         key = os.environ.get(self.api_key_env, "")
+        local = is_loopback(self.host)
         if key:
+            if self.scheme != "https" and not local:
+                raise LLMError(
+                    "refusing to send an API key over plain http to a non-loopback host; use https"
+                )
             headers["Authorization"] = f"Bearer {key}"
         req = urllib.request.Request(f"{self.base_url}/chat/completions", data=body, headers=headers)
+        handlers: list[urllib.request.BaseHandler] = [_NoRedirect()]
+        if local:
+            handlers.append(urllib.request.ProxyHandler({}))
+        opener = urllib.request.build_opener(*handlers)
         try:
-            with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # noqa: S310 - scheme checked
+            with opener.open(req, timeout=self.timeout) as resp:
                 data: Any = json.loads(resp.read().decode())
         except urllib.error.HTTPError as exc:
             raise LLMError(f"model endpoint returned HTTP {exc.code}") from exc
@@ -116,7 +154,7 @@ def _section(text: str, name: str) -> str:
 
 def _turn_lines(turns: Sequence[Turn], user_name: str) -> str:
     return "\n".join(
-        f"{date_tag(t.ts)}{user_name if t.role == 'user' else t.role.capitalize()}: {t.content}"
+        f"{date_tag(t.ts)}{user_name if t.role == 'user' else t.role.capitalize()}: {escape_tags(t.content)}"
         for t in turns
     )
 
@@ -176,7 +214,7 @@ class StubLLM:
             m = re.match(r"^(?:\[(\d{4}-\d{2}-\d{2})\]\s*)?([^:]+): (.*)$", line)
             if not m:
                 continue
-            ts = 0.0
+            ts: float | None = None
             if m.group(1):
                 ts = float(calendar.timegm(time.strptime(m.group(1), "%Y-%m-%d")))
             role = "user" if m.group(2) == name else "assistant"
@@ -209,7 +247,7 @@ class LLMExtractor:
         if not turns:
             return []
         prompt = (
-            f"<user_name>{user_name}</user_name>\n<conversation>\n"
+            f"<user_name>{escape_tags(user_name)}</user_name>\n<conversation>\n"
             f"{_turn_lines(turns, user_name)}\n</conversation>"
         )
         raw = self.llm.complete(
@@ -226,7 +264,7 @@ class LLMExtractor:
         return facts
 
     @staticmethod
-    def _to_fact(obj: Any, ts: float, prov: Provenance) -> Fact | None:
+    def _to_fact(obj: Any, ts: float | None, prov: Provenance) -> Fact | None:
         if not isinstance(obj, dict):
             return None
         subj, attr, val = (str(obj.get(k, "")).strip() for k in ("subject", "attribute", "value"))
@@ -256,7 +294,7 @@ class LLMSummarizer:
 
     def summarize(self, previous: str, turns: Sequence[Turn], max_tokens: int) -> str:
         prompt = (
-            f"<user_name>{self.user_name}</user_name>\n<summary>\n{previous}\n</summary>\n"
+            f"<user_name>{escape_tags(self.user_name)}</user_name>\n<summary>\n{escape_tags(previous)}\n</summary>\n"
             f"<new_turns>\n{_turn_lines(turns, self.user_name)}\n</new_turns>\n"
             f"Token budget: {max_tokens}"
         )
@@ -271,7 +309,9 @@ class LLMAnswerer:
         self.llm = llm
 
     def answer(self, question: str, context: str) -> str:
-        prompt = f"<context>\n{context}\n</context>\n<question>{question}</question>"
+        prompt = (
+            f"<context>\n{escape_tags(context)}\n</context>\n<question>{escape_tags(question)}</question>"
+        )
         out = self.llm.complete(
             [{"role": "system", "content": ANSWER_SYSTEM}, {"role": "user", "content": prompt}], max_tokens=32
         )
@@ -286,7 +326,8 @@ class LLMJudge:
 
     def judge(self, question: str, prediction: str, gold: str) -> bool:
         prompt = (
-            f"<question>{question}</question>\n<gold>{gold}</gold>\n<prediction>{prediction}</prediction>"
+            f"<question>{escape_tags(question)}</question>\n<gold>{escape_tags(gold)}</gold>\n"
+            f"<prediction>{escape_tags(prediction)}</prediction>"
         )
         out = self.llm.complete(
             [{"role": "system", "content": JUDGE_SYSTEM}, {"role": "user", "content": prompt}], max_tokens=3

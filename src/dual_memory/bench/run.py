@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import platform
 import statistics
 import time
@@ -20,6 +21,7 @@ from ..summarize import RuleSummarizer, Summarizer
 from ..text import approx_tokens, normalize_value
 from ..types import Role, Turn
 from .methods import (
+    RAG_VARIANTS,
     DualMemoryMethod,
     FullHistory,
     Method,
@@ -30,7 +32,8 @@ from .methods import (
 )
 
 QUESTION_TYPES = ("current", "previous", "static", "friend", "abstain")
-BASELINES = ("no-memory", "full-history", "vector-rag", "summarize-all")
+BASELINES = ("no-memory", "full-history", *RAG_VARIANTS, "summarize-all")
+SWEEP_METHODS = (*BASELINES, "dual-memory")
 
 
 @dataclass
@@ -70,23 +73,24 @@ def make_method(name: str, user: str, cfg: BenchConfig, comp: Components) -> Met
         return NoMemory(user, cfg.budget)
     if name == "full-history":
         return FullHistory(user, cfg.budget)
-    if name == "vector-rag":
-        return VectorRAG(user, cfg.budget, comp.embedder, cfg.k)
+    if name in RAG_VARIANTS:
+        return VectorRAG(user, cfg.budget, comp.embedder, cfg.k, name=name, **RAG_VARIANTS[name])
     if name == "summarize-all":
         return SummarizeEverything(user, cfg.budget, comp.summarizer_factory(user))
     variants = dual_variants()
     if name in variants:
-        config, history = variants[name]
+        v = variants[name]
         return DualMemoryMethod(
             user,
             cfg.budget,
             comp.embedder,
             k=cfg.k,
             name=name,
-            config=config,
+            config=v.config,
             extractor=comp.extractor,
             summarizer=comp.summarizer_factory(user),
-            include_history=history,
+            include_history=v.include_history,
+            kinds=v.kinds,
         )
     raise ValueError(f"unknown method {name!r}; known: {[*BASELINES, *variants]}")
 
@@ -122,7 +126,7 @@ def run_persona(persona: dict[str, Any], name: str, cfg: BenchConfig, comp: Comp
     for turns in sessions:
         method.ingest_session(turns)
     ingest_s = time.perf_counter() - t0
-    now = sessions[-1][-1].ts + 86400
+    now = (sessions[-1][-1].ts or 0.0) + 86400
     old_values = defaultdict(set)
     for s in persona["statements"]:
         old_values[(s["subject"], s["attribute"])].add(normalize_value(s["value"]))
@@ -174,6 +178,17 @@ def _mean(xs: Sequence[float]) -> float | None:
     return round(statistics.fmean(xs), 4) if xs else None
 
 
+def wilson(successes: int, n: int, z: float = 1.96) -> tuple[float, float] | None:
+    """Wilson score interval for a proportion (95% by default)."""
+    if n <= 0:
+        return None
+    p = successes / n
+    denom = 1 + z * z / n
+    centre = (p + z * z / (2 * n)) / denom
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / denom
+    return round(max(0.0, centre - half), 4), round(min(1.0, centre + half), 4)
+
+
 def _pct(xs: Sequence[float], p: float) -> float | None:
     if not xs:
         return None
@@ -191,6 +206,7 @@ def summarize_rows(name: str, parts: list[dict[str, Any]], k: int) -> dict[str, 
         "method": name,
         "questions": len(rows),
         "accuracy": acc(rows),
+        "accuracy_ci95": wilson(sum(bool(r["correct"]) for r in rows), len(rows)),
         "accuracy_covered": acc([r for r in rows if r["covered"]]),
         "by_type": {t: acc([r for r in rows if r["type"] == t]) for t in QUESTION_TYPES},
         "stale_rate": _mean([float(r["stale"]) for r in rows if "stale" in r]),
@@ -228,6 +244,8 @@ def run_benchmark(
             progress(f"{name}: accuracy {summaries[-1]['accuracy']} ({time.perf_counter() - t0:.1f}s)")
     return {
         "config": {
+            "embedder_revision": getattr(comp.embedder, "revision", None),
+            "embedder_files_sha256": getattr(comp.embedder, "files_sha256", None),
             "budget_tokens": cfg.budget,
             "k": cfg.k,
             "embedder": comp.embedder.name,
@@ -255,20 +273,26 @@ def _fmt(v: Any, pct: bool = True) -> str:
     return f"{100 * v:.1f}" if pct else f"{v}"
 
 
+def _ci(r: dict[str, Any]) -> str:
+    ci = r.get("accuracy_ci95")
+    return f"{100 * ci[0]:.1f}-{100 * ci[1]:.1f}" if ci else "n/a"
+
+
 def markdown_table(result: dict[str, Any]) -> str:
     k = result["config"]["k"]
     head = (
-        "| method | accuracy % | current | previous | static | friend | abstain | stale % "
-        f"| answer in context % | recall@{k} % | retrieve p50 ms | storage KB |"
+        "| method | accuracy % | 95% CI | current | previous | static | friend | abstain | stale % "
+        f"| answer in context % | recall@{k} % | context tokens | retrieve p50 ms | storage KB |"
     )
-    lines = [head, "|" + "---|" * 12]
+    lines = [head, "|" + "---|" * 14]
     for r in result["results"]:
         bt = r["by_type"]
         lines.append(
-            f"| {r['method']} | {_fmt(r['accuracy'])} | {_fmt(bt['current'])} | {_fmt(bt['previous'])} "
-            f"| {_fmt(bt['static'])} | {_fmt(bt['friend'])} | {_fmt(bt['abstain'])} "
+            f"| {r['method']} | {_fmt(r['accuracy'])} | {_ci(r)} | {_fmt(bt['current'])} "
+            f"| {_fmt(bt['previous'])} | {_fmt(bt['static'])} | {_fmt(bt['friend'])} | {_fmt(bt['abstain'])} "
             f"| {_fmt(r['stale_rate'])} | {_fmt(r['answer_in_context'])} | {_fmt(r.get(f'recall@{k}'))} "
-            f"| {_fmt(r['retrieve_ms_p50'], False)} | {r['storage_bytes'] / 1024:.0f} |"
+            f"| {r['avg_context_tokens']:.0f} | {_fmt(r['retrieve_ms_p50'], False)} "
+            f"| {r['storage_bytes'] / 1024:.0f} |"
         )
     return "\n".join(lines)
 

@@ -36,6 +36,12 @@ drink is X`, `Name's main hobby is X`, `Name's diet is X`, `Name drives a X`,
 so "My friend Tomas lives in Oslo" stores `(Tomas, city, Oslo)`. Names must
 start with a capital letter; pronouns (She, He, They...) are ignored.
 
+## Scripts other than English
+
+Words, values and names are Unicode-aware: "I live in Zürich", "My
+favourite drink is café au lait", "My friend Åsa lives in 東京" all work.
+The *phrasings* are still English.
+
 ## Values
 
 A value is one to four words and ends at punctuation or at words like `now`,

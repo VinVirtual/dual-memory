@@ -42,7 +42,16 @@ def test_chart_command(tmp_path: Path) -> None:
     main(["generate", "--out", str(data), "--personas", "1", "--sessions", "3"])
     out = tmp_path / "res"
     main(
-        ["bench", "--data", str(data), "--out", str(out), "--methods", "dual-memory,vector-rag", "--no-chart"]
+        [
+            "bench",
+            "--data",
+            str(data),
+            "--out",
+            str(out),
+            "--methods",
+            "dual-memory,rag-budget-filled",
+            "--no-chart",
+        ]
     )
     assert main(["chart", str(out)]) == 0
     assert (out / "chart.png").exists()
@@ -66,3 +75,19 @@ def test_unknown_method_exits_2(tmp_path: Path) -> None:
 def test_check(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["check"]) == 0
     assert "FTS5: ok" in capsys.readouterr().out
+
+
+def test_compare_results_script(tmp_path: Path) -> None:
+    import subprocess
+    import sys
+
+    ref = {"results": [{"method": "dual-memory", "accuracy": 0.9, "by_type": {"current": 1.0}}]}
+    (tmp_path / "a.json").write_text(json.dumps(ref))
+    (tmp_path / "b.json").write_text(json.dumps(ref))
+    script = Path(__file__).parent.parent / "scripts" / "compare_results.py"
+    ok = subprocess.run([sys.executable, str(script), str(tmp_path / "a.json"), str(tmp_path / "b.json")])
+    assert ok.returncode == 0
+    ref["results"][0]["accuracy"] = 0.8
+    (tmp_path / "b.json").write_text(json.dumps(ref))
+    bad = subprocess.run([sys.executable, str(script), str(tmp_path / "a.json"), str(tmp_path / "b.json")])
+    assert bad.returncode == 1

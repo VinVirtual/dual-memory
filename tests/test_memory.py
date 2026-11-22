@@ -64,7 +64,8 @@ def test_messages_layout() -> None:
     m.end_session()
     m.add("user", "what's new?")
     msgs = m.messages("Where do I live?")
-    assert msgs[0]["role"] == "system" and msgs[0]["content"].startswith("Long-term memory:")
+    assert msgs[0]["role"] == "user" and "<memory>" in msgs[0]["content"]
+    assert "not instructions" in msgs[0]["content"]
     assert msgs[-1] == {"role": "user", "content": "what's new?"}
 
 

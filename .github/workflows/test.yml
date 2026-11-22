@@ -23,16 +23,17 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install
-        run: python -m pip install -e ".[dev]"
+      - name: Install (pinned tools)
+        run: python -m pip install -r requirements-ci.txt -e .
       - name: Lint
         run: ruff check src tests && ruff format --check src tests
       - name: Type check
         run: mypy
       - name: Unit tests
-        # The ONNX embedder test needs a downloaded model and is skipped here.
+        # The ONNX embedder tests need onnxruntime and a downloaded model; they are skipped here.
+        # tests/test_bench.py::test_stub_benchmark_is_reproducible checks a hash of every stub answer.
         run: pytest --cov=dual_memory --cov-report=term
-      - name: Benchmark smoke run (stub mode, hashing embedder)
+      - name: Hashing benchmark reproduces the committed results
         run: |
-          dual-memory generate --out /tmp/bench.json --personas 4 --sessions 6
-          dual-memory bench --data /tmp/bench.json --out /tmp/bench-out --budgets 128,256
+          dual-memory bench --data examples/benchmark/data.json --out /tmp/hashing --embedder hashing --budget 256 --no-chart
+          python scripts/compare_results.py /tmp/hashing/results.json examples/benchmark/hashing/results.json

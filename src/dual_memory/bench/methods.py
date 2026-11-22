@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from ..embedders import Embedder
-from ..extract import Extractor
+from ..extract import Extractor, split_sentences
 from ..longterm import LongTermConfig, RetrievalWeights
 from ..memory import DualMemory, render_item
 from ..store import SQLiteStore
@@ -47,13 +47,21 @@ def render_turn(turn: Turn, user_name: str) -> str:
     return f"{date_tag(turn.ts)}{who}: {turn.content}"
 
 
-def fit(lines: Sequence[str], budget: int, counter: TokenCounter = approx_tokens) -> list[str]:
-    """Keep lines in order until the token budget is used."""
+def fit(
+    lines: Sequence[str], budget: int, counter: TokenCounter = approx_tokens, skip_overflow: bool = False
+) -> list[str]:
+    """Keep lines in order until the token budget is used.
+
+    With ``skip_overflow`` a line that does not fit is skipped and later,
+    shorter lines may still fill the remaining budget.
+    """
     out: list[str] = []
     used = 0
     for line in lines:
         cost = counter(line) + 1
         if used + cost > budget:
+            if skip_overflow:
+                continue
             break
         out.append(line)
         used += cost
@@ -106,21 +114,59 @@ class FullHistory:
 
 
 class VectorRAG:
-    """Baseline: embed every turn; retrieve the top ``k`` turns by cosine similarity."""
+    """Baseline: plain vector retrieval over the raw conversation.
 
-    name = "vector-rag"
+    Variants (all embed the text with the same embedder and rank by cosine):
 
-    def __init__(self, user_name: str, budget: int, embedder: Embedder, k: int = 8) -> None:
+    - ``naive-rag``: every turn, user and assistant, top ``k`` turns. With
+      short turns this leaves much of the budget unused.
+    - ``rag-user-turns``: user turns only, top ``k``.
+    - ``rag-budget-filled``: user turns only, ranked, added until the
+      budget is full.
+    - ``rag-sentences``: user turns split into sentences, ranked, added
+      until the budget is full.
+    """
+
+    def __init__(
+        self,
+        user_name: str,
+        budget: int,
+        embedder: Embedder,
+        k: int = 8,
+        *,
+        name: str = "naive-rag",
+        user_only: bool = False,
+        fill_budget: bool = False,
+        sentences: bool = False,
+        candidates: int = 60,
+    ) -> None:
+        self.name = name
         self.user_name = user_name
         self.budget = budget
         self.k = k
+        self.user_only = user_only
+        self.fill_budget = fill_budget
+        self.sentences = sentences
+        self.candidates = candidates
         self.embedder = embedder
         self.store = SQLiteStore(":memory:", embedder_name=embedder.name, dim=embedder.dim)
 
+    def _chunks(self, turns: Sequence[Turn]) -> list[tuple[Turn, str]]:
+        out: list[tuple[Turn, str]] = []
+        for t in turns:
+            if self.user_only and t.role != "user":
+                continue
+            parts = split_sentences(t.content) if self.sentences else [t.content]
+            out.extend((t, p) for p in parts if p.strip())
+        return out
+
     def ingest_session(self, turns: Sequence[Turn]) -> None:
-        texts = [render_turn(t, self.user_name) for t in turns]
-        vecs = self.embedder.embed([t.content for t in turns])
-        for turn, text, vec in zip(turns, texts, vecs, strict=True):
+        chunks = self._chunks(turns)
+        if not chunks:
+            return
+        vecs = self.embedder.embed([c for _, c in chunks])
+        for (turn, chunk), vec in zip(chunks, vecs, strict=True):
+            text = render_turn(Turn(turn.role, chunk, turn.ts, turn.session_id, turn.index), self.user_name)
             fact = Fact(
                 text=text,
                 kind="turn",
@@ -131,9 +177,9 @@ class VectorRAG:
 
     def retrieve(self, question: str, now: float) -> Retrieved:
         q = self.embedder.embed([question])[0]
-        hits = self.store.vector_search(q, self.k)
+        hits = self.store.vector_search(q, self.candidates if self.fill_budget else self.k)
         items = self.store.get_many(i for i, _ in hits)
-        lines = fit([items[i].text for i, _ in hits], self.budget)
+        lines = fit([items[i].text for i, _ in hits], self.budget, skip_overflow=self.fill_budget)
         return Retrieved("\n".join(lines), lines)
 
     def size_bytes(self) -> int:
@@ -141,6 +187,14 @@ class VectorRAG:
 
     def close(self) -> None:
         self.store.close()
+
+
+RAG_VARIANTS: dict[str, dict[str, bool]] = {
+    "naive-rag": {},
+    "rag-user-turns": {"user_only": True},
+    "rag-budget-filled": {"user_only": True, "fill_budget": True},
+    "rag-sentences": {"user_only": True, "fill_budget": True, "sentences": True},
+}
 
 
 class SummarizeEverything:
@@ -181,11 +235,13 @@ class DualMemoryMethod:
         extractor: Extractor | None = None,
         summarizer: Summarizer | None = None,
         include_history: bool = True,
+        kinds: tuple[str, ...] = (),
     ) -> None:
         self.name = name
         self.budget = budget
         self.k = k
         self.include_history = include_history
+        self.kinds = kinds
         self._now = 0.0
         self.mem = DualMemory(
             user_name=user_name,
@@ -198,15 +254,17 @@ class DualMemoryMethod:
 
     def ingest_session(self, turns: Sequence[Turn]) -> None:
         for t in turns:
-            self._now = t.ts
+            self._now = t.ts if t.ts is not None else self._now
             self.mem.add(t.role, t.content, ts=t.ts)
         self.mem.end_session()
 
     def retrieve(self, question: str, now: float) -> Retrieved:
         self._now = now
-        hits = self.mem.recall(question, self.k)
+        hits = self.mem.recall(question, self.k, kinds=self.kinds, relevant_only=True)
         units = ["\n".join(render_item(h.item)) for h in hits]
-        ctx = self.mem.context(question, self.k, self.budget, include_history=self.include_history)
+        ctx = self.mem.context(
+            question, self.k, self.budget, include_history=self.include_history, kinds=self.kinds
+        )
         return Retrieved(ctx, units)
 
     def size_bytes(self) -> int:
@@ -216,12 +274,21 @@ class DualMemoryMethod:
         self.mem.close()
 
 
-def dual_variants() -> dict[str, tuple[LongTermConfig, bool]]:
-    """Ablations of dual-memory: name -> (config, include_history)."""
+@dataclass(frozen=True)
+class DualVariant:
+    config: LongTermConfig = field(default_factory=LongTermConfig)
+    include_history: bool = True
+    kinds: tuple[str, ...] = ()
+
+
+def dual_variants() -> dict[str, DualVariant]:
+    """dual-memory and its ablations."""
     return {
-        "dual-memory": (LongTermConfig(), True),
-        "dual: no supersede": (LongTermConfig(supersede=False), True),
-        "dual: vector only": (LongTermConfig(weights=RetrievalWeights(1.0, 0.0, 0.0, 0.0)), True),
-        "dual: keyword only": (LongTermConfig(weights=RetrievalWeights(0.0, 1.0, 0.0, 0.0)), True),
-        "dual: no history": (LongTermConfig(), False),
+        "dual-memory": DualVariant(),
+        "dual: no supersede": DualVariant(LongTermConfig(supersede=False)),
+        "dual: vector only": DualVariant(LongTermConfig(weights=RetrievalWeights(1.0, 0.0, 0.0, 0.0))),
+        "dual: keyword only": DualVariant(LongTermConfig(weights=RetrievalWeights(0.0, 1.0, 0.0, 0.0))),
+        "dual: no history": DualVariant(include_history=False),
+        "dual: facts only": DualVariant(kinds=("fact",)),
+        "dual: episodes only": DualVariant(kinds=("episode",)),
     }

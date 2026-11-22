@@ -64,7 +64,7 @@ def test_messages_include_summary_first() -> None:
     wm.summary = "[2025-01-01] Mira: I live in Oslo."
     wm.add(Turn("user", "hi"))
     msgs = wm.messages()
-    assert msgs[0]["role"] == "system" and "Oslo" in msgs[0]["content"]
+    assert msgs[0]["role"] == "user" and "Oslo" in msgs[0]["content"] and "<summary>" in msgs[0]["content"]
     assert msgs[1] == {"role": "user", "content": "hi"}
 
 

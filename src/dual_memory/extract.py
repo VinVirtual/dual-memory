@@ -20,8 +20,11 @@ from typing import Protocol
 from .types import Fact, Provenance, Turn
 
 _END = r"(?=\s+(?:now|these days|nowadays|at the moment|again|since|for|because|and|but|with|after|at|in|on|near|from|so|which|who|while|last|this|yesterday|today|recently|lately|too|full[- ]time)\b|\s*[.,!?;:)]|\s*$)"
-_VAL = r"(?P<val>[A-Za-z][A-Za-z0-9'&-]*(?:\s+[A-Za-z0-9][A-Za-z0-9'&-]*){0,3}?)"
-_NAME = r"(?P<subj>(?-i:[A-Z][a-z]+(?:\s[A-Z][a-z]+)?))"
+# Values start with a letter (any script) and run for one to four words.
+_VAL = r"(?P<val>[^\W\d_][\w'&-]*(?:\s+\w[\w'&-]*){0,3}?)"
+_UPPER = "A-ZÀ-ÖØ-Þ"
+_LOWER = "a-zß-öø-ÿ"
+_NAME = rf"(?P<subj>(?-i:[{_UPPER}][{_LOWER}]+(?:\s[{_UPPER}][{_LOWER}]+)?))"
 _ART = r"(?:an?\s+|the\s+)?"
 _FAV = r"favou?rite"
 _REL = r"(?:friend|brother|sister|cousin|colleague|neighbou?r|coworker)"
@@ -33,7 +36,7 @@ HYPOTHETICAL_RE = re.compile(
     r"\b(?:if|would|might|maybe|perhaps|thinking (?:about|of)|considering|someday|one day|dream(?:ing)? of|wish|hope to|plan(?:ning)? to)\b",
     re.I,
 )
-_SENTENCE_RE = re.compile(r"[^.!?]+[.!?]?")
+_SENTENCE_RE = re.compile(r"[^.!?。！？]+[.!?。！？]?")
 
 
 @dataclass(frozen=True)
@@ -146,7 +149,7 @@ _THIRD_PERSON: list[tuple[re.Pattern[str], str]] = [
 ]
 
 # "my friend Tomas lives in Oslo": the relation word introduces a named subject.
-_RELATION_RE = re.compile(rf"\bmy {_REL} (?=[A-Z][a-z]+)", re.I)
+_RELATION_RE = re.compile(rf"\bmy {_REL} (?=(?-i:[{_UPPER}]))", re.I)
 _PRONOUN_SUBJECTS = frozenset(
     {"i", "he", "she", "they", "we", "it", "my", "our", "his", "her", "their", "you"}
 )
